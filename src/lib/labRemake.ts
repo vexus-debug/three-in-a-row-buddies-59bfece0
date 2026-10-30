@@ -1,3 +1,4 @@
+import { addWorkingDaysYmd, DEFAULT_WORK_CALENDAR, type WorkCalendar } from "@/lib/labCalendar";
 // Remake & warranty rules for dental lab cases.
 
 export const REMAKE_FAULTS = [
@@ -32,10 +33,32 @@ export const remakeFee = (fault: RemakeFault, originalFee: number) =>
 export const hasOpenRemake = (parentId: string, cases: { parent_case_id?: string | null; status?: string | null }[]) =>
   cases.some((c) => c.parent_case_id === parentId && !["delivered", "cancelled"].includes(c.status || ""));
 
-export function remakeDueDate(from = new Date()) {
-  const d = new Date(from);
-  d.setDate(d.getDate() + REMAKE_TURNAROUND_DAYS);
-  return d.toISOString().slice(0, 10);
+export function remakeDueDate(from = new Date(), cal: WorkCalendar = DEFAULT_WORK_CALENDAR) {
+  return addWorkingDaysYmd(from, REMAKE_TURNAROUND_DAYS, cal);
+}
+
+/** Remake rate for a period: remakes opened in the period ÷ cases delivered in the period. */
+export function periodRemakeRate(
+  cases: { parent_case_id?: string | null; status?: string | null; created_at?: string | null; delivered_date?: string | null; completed_date?: string | null }[],
+  fromYmd: string, toYmd: string,
+) {
+  const inP = (d?: string | null) => !!d && d.slice(0, 10) >= fromYmd && d.slice(0, 10) <= toYmd;
+  const live = cases.filter((c) => c.status !== "cancelled");
+  const delivered = live.filter((c) => !c.parent_case_id && c.status === "delivered" && inP(c.delivered_date || c.completed_date)).length;
+  const remakes = live.filter((c) => c.parent_case_id && inP(c.created_at)).length;
+  return { delivered, remakes, pct: delivered ? Math.round((remakes / delivered) * 100) : 0 };
+}
+
+/** Free-remake value: each original case's fee counts once, however many remakes it spawned. */
+export function freeRemakeValue(claims: { data?: { fault?: string; original_fee?: number | string; original_case_id?: string; original_case?: string } | null; case_id?: string | null }[]) {
+  const seen = new Set<string>();
+  return claims.reduce((sum, r, i) => {
+    if (r.data?.fault === "clinic") return sum;
+    const key = r.data?.original_case_id || r.data?.original_case || `row-${i}`;
+    if (seen.has(key)) return sum;
+    seen.add(key);
+    return sum + Number(r.data?.original_fee || 0);
+  }, 0);
 }
 
 /** Remake % grouped by a key (clinic, work type, technician). */

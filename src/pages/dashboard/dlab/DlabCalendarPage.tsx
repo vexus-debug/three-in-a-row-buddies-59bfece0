@@ -14,12 +14,13 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useLabCases, useUpdateLabCase, type LabCaseRow } from "@/hooks/useLabCases";
 import { clientOf, isRush, patientOf } from "@/hooks/useDentalLab";
 import { stageLabel } from "@/config/dentalLab";
+import { useLabWorkCalendar } from "@/hooks/useLabWorkCalendar";
+import { useSaveLabSettings } from "@/hooks/lab/useLab";
 import {
-  addDaysYmd, daysLate, isUnscheduled, loadLevel, turnaroundFor, unitsByDay, unitsOf, type LoadLevel,
+  addWorkingDaysYmd, netDaysLate, isUnscheduled, loadLevel, turnaroundFor, unitsByDay, unitsOf, type LoadLevel,
 } from "@/lib/labCalendar";
 
 type View = "month" | "week" | "day";
-const CAP_KEY = "dlab-daily-capacity";
 
 const LOAD_STYLE: Record<LoadLevel, string> = {
   none: "",
@@ -57,15 +58,19 @@ export default function DlabCalendarPage() {
   const [view, setView] = useState<View>("month");
   const [cursor, setCursor] = useState(new Date());
   const [picked, setPicked] = useState<string>(format(new Date(), "yyyy-MM-dd"));
+  const work = useLabWorkCalendar();
+  const saveSettings = useSaveLabSettings();
   const [capacity, setCapacity] = useState(20);
   const [overdueOpen, setOverdueOpen] = useState(true);
   const [drawer, setDrawer] = useState(false);
 
-  useEffect(() => {
-    const v = Number(localStorage.getItem(CAP_KEY));
-    if (v > 0) setCapacity(v);
-  }, []);
-  const saveCap = (v: number) => { setCapacity(v); if (v > 0) localStorage.setItem(CAP_KEY, String(v)); };
+  // Capacity and working days live in the lab's shared settings, not on this device.
+  useEffect(() => { if (work.loaded) setCapacity(work.capacity); }, [work.loaded, work.capacity]);
+  const saveCap = () => { if (capacity > 0 && capacity !== work.capacity) saveSettings.mutate({ daily_capacity: capacity }); };
+  const saturdayOpen = work.cal.workingDays.includes(6);
+  const toggleSaturday = () => saveSettings.mutate({
+    working_days: saturdayOpen ? work.cal.workingDays.filter((d) => d !== 6) : [...work.cal.workingDays, 6].sort(),
+  });
 
   const active = useMemo(() => cases.filter((c) => c.status !== "cancelled"), [cases]);
   const byDay = useMemo(() => {
@@ -75,7 +80,7 @@ export default function DlabCalendarPage() {
   }, [active]);
   const units = useMemo(() => unitsByDay(cases as any), [cases]);
   const overdue = useMemo(
-    () => active.map((c) => ({ c, late: daysLate(c) })).filter((x) => x.late > 0).sort((a, b) => b.late - a.late),
+    () => active.map((c) => ({ c, late: netDaysLate(c as any) })).filter((x) => x.late > 0).sort((a, b) => b.late - a.late),
     [active],
   );
   const unscheduled = useMemo(() => active.filter((c) => isUnscheduled(c)), [active]);
@@ -113,7 +118,7 @@ export default function DlabCalendarPage() {
   }, [dayCases]);
 
   const schedule = (c: LabCaseRow, days = turnaroundFor(c.work_type)) =>
-    update.mutate({ id: c.id, due_date: addDaysYmd(new Date(), days) });
+    update.mutate({ id: c.id, due_date: addWorkingDaysYmd(new Date(), days, work.cal) });
 
   return (
     <div className="space-y-4">
@@ -132,8 +137,13 @@ export default function DlabCalendarPage() {
         </Button>
         <label className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
           Units/day
-          <Input type="number" min={1} value={capacity} onChange={(e) => saveCap(Number(e.target.value))} className="h-8 w-16" />
+          <Input type="number" min={1} value={capacity} onChange={(e) => setCapacity(Number(e.target.value))} onBlur={saveCap}
+            onKeyDown={(e) => e.key === "Enter" && saveCap()} className="h-8 w-16" />
         </label>
+        <Button size="sm" variant={saturdayOpen ? "default" : "outline"} disabled={saveSettings.isPending} onClick={toggleSaturday}
+          title="Due dates skip closed days and lab holidays">
+          {saturdayOpen ? "Open Saturdays" : "Closed weekends"}
+        </Button>
       </div>
 
       {/* Overdue tray */}
@@ -277,7 +287,7 @@ export default function DlabCalendarPage() {
                 <div key={c.id} className="flex items-center gap-2">
                   <div className="min-w-0 flex-1"><CaseLine c={c} /></div>
                   <Button size="sm" variant="outline" disabled={update.isPending} onClick={() => schedule(c, days)}>
-                    +{days}d · {format(addDays(new Date(), days), "d MMM")}
+                    +{days} work days · {format(parseISO(addWorkingDaysYmd(new Date(), days, work.cal)), "d MMM")}
                   </Button>
                 </div>
               );
