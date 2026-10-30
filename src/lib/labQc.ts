@@ -20,7 +20,7 @@ export const REWORK_TARGETS = [
 ] as const;
 
 /** Cases waiting for inspection. */
-export const QC_QUEUE_STAGES = ["ceramics", "qc"];
+export const QC_QUEUE_STAGES = ["qc"]; // ceramics is still being glazed — never inspectable
 
 export type QcAnswers = Record<string, string | undefined>;
 

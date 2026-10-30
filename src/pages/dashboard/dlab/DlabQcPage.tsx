@@ -102,7 +102,6 @@ export default function DlabQcPage() {
 
 function InspectDialog({ c, technician, onClose }: { c: LabCaseRow; technician?: string; onClose: () => void }) {
   const qc = useQueryClient();
-  const { currentOrg } = useOrg();
   const { user } = useAuth() as any;
   const [a, setA] = useState<QcAnswers>({});
   const [notes, setNotes] = useState("");
