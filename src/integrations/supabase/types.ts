@@ -2226,6 +2226,7 @@ export type Database = {
           clinic_fee: number | null
           completed_date: string | null
           created_at: string
+          delivered_date: string | null
           dentist_id: string | null
           discount: number
           due_date: string | null
@@ -2235,6 +2236,7 @@ export type Database = {
           external_contact_person: string | null
           external_patient_name: string | null
           hold_at: string | null
+          hold_days_total: number
           hold_reason: string | null
           id: string
           instructions: string | null
@@ -2270,6 +2272,7 @@ export type Database = {
           clinic_fee?: number | null
           completed_date?: string | null
           created_at?: string
+          delivered_date?: string | null
           dentist_id?: string | null
           discount?: number
           due_date?: string | null
@@ -2279,6 +2282,7 @@ export type Database = {
           external_contact_person?: string | null
           external_patient_name?: string | null
           hold_at?: string | null
+          hold_days_total?: number
           hold_reason?: string | null
           id?: string
           instructions?: string | null
@@ -2314,6 +2318,7 @@ export type Database = {
           clinic_fee?: number | null
           completed_date?: string | null
           created_at?: string
+          delivered_date?: string | null
           dentist_id?: string | null
           discount?: number
           due_date?: string | null
@@ -2323,6 +2328,7 @@ export type Database = {
           external_contact_person?: string | null
           external_patient_name?: string | null
           hold_at?: string | null
+          hold_days_total?: number
           hold_reason?: string | null
           id?: string
           instructions?: string | null
@@ -2642,6 +2648,8 @@ export type Database = {
       lab_settings: {
         Row: {
           created_at: string
+          daily_capacity: number
+          holidays: string[]
           id: string
           org_id: string
           report_footer: string | null
@@ -2650,9 +2658,12 @@ export type Database = {
           serial_prefix: string
           sla_hours: number
           updated_at: string
+          working_days: number[]
         }
         Insert: {
           created_at?: string
+          daily_capacity?: number
+          holidays?: string[]
           id?: string
           org_id: string
           report_footer?: string | null
@@ -2661,9 +2672,12 @@ export type Database = {
           serial_prefix?: string
           sla_hours?: number
           updated_at?: string
+          working_days?: number[]
         }
         Update: {
           created_at?: string
+          daily_capacity?: number
+          holidays?: string[]
           id?: string
           org_id?: string
           report_footer?: string | null
@@ -2672,6 +2686,7 @@ export type Database = {
           serial_prefix?: string
           sla_hours?: number
           updated_at?: string
+          working_days?: number[]
         }
         Relationships: [
           {
@@ -7178,11 +7193,30 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_lab_manager: {
+        Args: { _org_id: string; _user_id: string }
+        Returns: boolean
+      }
       is_org_dentist: {
         Args: { _org_id: string; _user_id: string }
         Returns: boolean
       }
       is_super_admin: { Args: { _user_id: string }; Returns: boolean }
+      lab_batch_move: { Args: { p_moves: Json }; Returns: number }
+      lab_override_qc_move: {
+        Args: { p_case_id: string; p_reason: string; p_status: string }
+        Returns: undefined
+      }
+      lab_submit_qc: {
+        Args: {
+          p_case_id: string
+          p_data: Json
+          p_qc_status: string
+          p_record_status: string
+          p_status: string
+        }
+        Returns: string
+      }
       list_org_branches: {
         Args: { p_org_id: string }
         Returns: {
