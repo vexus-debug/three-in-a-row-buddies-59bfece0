@@ -32,8 +32,11 @@ export default function DlabWarrantiesPage() {
   const originals = live.filter((c) => !(c as any).parent_case_id);
   const children = live.filter((c) => (c as any).parent_case_id);
   const parentOf = (c: LabCaseRow) => cases.find((p) => p.id === (c as any).parent_case_id);
-  const rate = originals.length ? Math.round((children.length / originals.length) * 100) : 0;
-  const lost = claims.filter((r) => r.data?.fault !== "clinic").reduce((s, r) => s + Number(r.data?.original_fee || 0), 0);
+  // Last 90 days: remakes opened ÷ originals delivered in the same window (in-progress work is excluded).
+  const periodTo = new Date().toISOString().slice(0, 10);
+  const periodFrom = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
+  const rate = periodRemakeRate(cases as any, periodFrom, periodTo).pct;
+  const lost = freeRemakeValue(claims as any);
   const byFault = (k: string) => claims.filter((r) => r.data?.fault === k).length;
 
   const kpis = useMemo(() => {

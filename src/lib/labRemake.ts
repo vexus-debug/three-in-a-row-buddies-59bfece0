@@ -50,11 +50,11 @@ export function periodRemakeRate(
 }
 
 /** Free-remake value: each original case's fee counts once, however many remakes it spawned. */
-export function freeRemakeValue(claims: { data?: { fault?: string; original_fee?: number | string; original_case_id?: string; original_case?: string } | null; case_id?: string | null }[]) {
+export function freeRemakeValue(claims: { title?: string | null; case_id?: string | null; data?: { fault?: string; original_fee?: number | string } | null }[]) {
   const seen = new Set<string>();
   return claims.reduce((sum, r, i) => {
     if (r.data?.fault === "clinic") return sum;
-    const key = r.data?.original_case_id || r.data?.original_case || `row-${i}`;
+    const key = baseCaseNumber(r.title || "") || r.case_id || `row-${i}`;
     if (seen.has(key)) return sum;
     seen.add(key);
     return sum + Number(r.data?.original_fee || 0);
