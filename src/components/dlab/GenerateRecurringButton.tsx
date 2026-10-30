@@ -7,13 +7,15 @@ import { useOrg } from "@/hooks/useOrg";
 import { toast } from "@/hooks/use-toast";
 import type { LabRecord } from "@/hooks/useLabRecords";
 import { dueOrders, nextDueAfter } from "@/lib/labRecurring";
-import { turnaroundFor, addDaysYmd } from "@/lib/labCalendar";
+import { turnaroundFor, addWorkingDaysYmd } from "@/lib/labCalendar";
+import { useLabWorkCalendar } from "@/hooks/useLabWorkCalendar";
 
 /** Creates a Case Board case for every active recurring order that is due, then rolls its next due date forward. */
 export function GenerateRecurringButton({ orders }: { orders: LabRecord[] }) {
   const { currentOrg } = useOrg();
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
+  const { cal } = useLabWorkCalendar();
   const due = dueOrders(orders as any[]);
 
   const run = async () => {
@@ -27,7 +29,7 @@ export function GenerateRecurringButton({ orders }: { orders: LabRecord[] }) {
         org_id: currentOrg.org_id, client_type: "external", status: "pending", qc_status: "pending",
         external_client_name: d.client || o.title, work_type: d.work_type || "Other",
         instructions: [`Recurring order: ${o.title}`, d.notes].filter(Boolean).join("\n"),
-        due_date: addDaysYmd(new Date(), turnaroundFor(d.work_type)),
+        due_date: addWorkingDaysYmd(new Date(), turnaroundFor(d.work_type), cal),
         lab_fee: Number(o.amount || 0), urgency: "normal", is_urgent: false,
       });
       if (error) { failed.push(o.title); continue; }

@@ -10,6 +10,7 @@ import { toast } from "@/hooks/use-toast";
 import { useOrg } from "@/hooks/useOrg";
 import { useLabCases, type LabCaseRow } from "@/hooks/useLabCases";
 import { clientOf, patientOf } from "@/hooks/useDentalLab";
+import { useLabWorkCalendar } from "@/hooks/useLabWorkCalendar";
 import { REMAKE_FAULTS, REMAKE_REASONS, hasOpenRemake, nextRemakeNumber, remakeDueDate, remakeFee, type RemakeFault } from "@/lib/labRemake";
 import { REMAKE_SPAWNED } from "@/config/dentalLab";
 
@@ -24,6 +25,7 @@ export function RemakeDialog({ c, onClose, onCreated }: { c: LabCaseRow; onClose
   const [reason, setReason] = useState("Fit");
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
+  const { cal } = useLabWorkCalendar();
   const open = hasOpenRemake(c.id, cases as any);
   const number = nextRemakeNumber(c.case_number || "", cases.map((x) => x.case_number || ""));
   const fee = remakeFee(fault, Number(c.lab_fee || 0));
@@ -45,7 +47,7 @@ export function RemakeDialog({ c, onClose, onCreated }: { c: LabCaseRow; onClose
         external_client_email: src.external_client_email, external_patient_name: src.external_patient_name,
         work_type: c.work_type, material: c.material, shade: c.shade, teeth: src.teeth || [],
         instructions: c.instructions, job_instructions: src.job_instructions, job_description: src.job_description,
-        is_urgent: true, urgency: "urgent", due_date: remakeDueDate(), lab_fee: fee, clinic_fee: src.clinic_fee,
+        is_urgent: true, urgency: "urgent", due_date: remakeDueDate(new Date(), cal), lab_fee: fee, clinic_fee: src.clinic_fee,
         notes: `Remake of ${c.case_number} — ${REMAKE_FAULTS.find((f) => f.key === fault)?.label}: ${reason}${notes ? `. ${notes}` : ""}`,
       }).select("id").single();
       if (error) throw error;

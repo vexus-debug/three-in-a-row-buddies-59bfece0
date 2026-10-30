@@ -62,3 +62,31 @@ export function unitsByDay(cases: CalCase[]) {
   });
   return m;
 }
+
+/** Lab working calendar: ISO weekdays (1=Mon…7=Sun) and closed dates (YYYY-MM-DD). */
+export interface WorkCalendar { workingDays: number[]; holidays: string[] }
+export const DEFAULT_WORK_CALENDAR: WorkCalendar = { workingDays: [1, 2, 3, 4, 5], holidays: [] };
+
+const isoDow = (d: Date) => (d.getDay() === 0 ? 7 : d.getDay());
+
+export function isWorkingDay(d: Date, cal: WorkCalendar = DEFAULT_WORK_CALENDAR) {
+  if (!cal.workingDays.length) return true;
+  return cal.workingDays.includes(isoDow(d)) && !cal.holidays.includes(ymd(d));
+}
+
+/** Due date after N lab working days (skips closed weekdays and holidays). */
+export function addWorkingDaysYmd(from: Date, days: number, cal: WorkCalendar = DEFAULT_WORK_CALENDAR) {
+  const d = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+  let left = Math.max(0, Math.round(days));
+  let guard = 0;
+  while (left > 0 && guard++ < 3660) {
+    d.setDate(d.getDate() + 1);
+    if (isWorkingDay(d, cal)) left--;
+  }
+  return ymd(d);
+}
+
+/** Days late net of time the case spent on clinic hold (lab is not blamed for holds). */
+export function netDaysLate(c: CalCase & { hold_days_total?: number | null }, today = new Date()) {
+  return Math.max(0, daysLate(c, today) - Math.floor(Number(c.hold_days_total || 0)));
+}

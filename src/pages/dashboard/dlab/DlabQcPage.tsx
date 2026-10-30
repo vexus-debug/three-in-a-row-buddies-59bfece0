@@ -102,7 +102,6 @@ export default function DlabQcPage() {
 
 function InspectDialog({ c, technician, onClose }: { c: LabCaseRow; technician?: string; onClose: () => void }) {
   const qc = useQueryClient();
-  const { currentOrg } = useOrg();
   const { user } = useAuth() as any;
   const [a, setA] = useState<QcAnswers>({});
   const [notes, setNotes] = useState("");
@@ -117,20 +116,16 @@ function InspectDialog({ c, technician, onClose }: { c: LabCaseRow; technician?:
     setBusy(true);
     try {
       const sb = supabase as any;
-      const today = new Date().toISOString().slice(0, 10);
-      const patch: any = { qc_status: out.qc_status, status: out.status };
-      if (out.status === "ready") patch.completed_date = (c as any).completed_date || today;
-      const { error: e1 } = await sb.from("lab_cases").update(patch).eq("id", c.id);
-      if (e1) throw e1;
-      const { error: e2 } = await sb.from("lab_records").insert({
-        org_id: currentOrg?.org_id, kind: "qc", case_id: c.id, title: c.case_number, status: out.record, amount: 0, record_date: today,
-        data: {
+      // One transaction: the case move and the inspection record succeed or fail together.
+      const { error } = await sb.rpc("lab_submit_qc", {
+        p_case_id: c.id, p_qc_status: out.qc_status, p_status: out.status, p_record_status: out.record,
+        p_data: {
           ...a, notes, work_type: c.work_type, shade: c.shade, client: clientOf(c), technician: technician || "",
           inspector: user?.user_metadata?.full_name || user?.email || "", failed: failed.map((p) => p.label),
           sent_to: out.qc_status === "rework_needed" ? out.status : null,
         },
       });
-      if (e2) throw e2;
+      if (error) throw error;
       qc.invalidateQueries({ queryKey: ["lab_cases"] });
       qc.invalidateQueries({ queryKey: ["lab_records"] });
       toast({ title: out.status === "ready" ? `${c.case_number} passed — Ready to Ship` : out.qc_status === "rework_needed" ? `${c.case_number} sent back to ${stageLabel(out.status)}` : `${c.case_number} kept in QC` });
