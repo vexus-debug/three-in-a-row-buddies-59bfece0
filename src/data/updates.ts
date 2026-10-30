@@ -13,6 +13,22 @@ export interface UpdateEntry {
 
 export const updates: UpdateEntry[] = [
   {
+    version: "v2.28.0",
+    date: "October 30, 2026",
+    title: "Safer dental lab: locked QC gate, all-or-nothing saves, working-day due dates",
+    kind: "fix",
+    items: [
+      { kind: "fix", text: "Only an owner, admin or manager can ship a case past a failed or missing quality check, and they must give a reason that is saved in the case history." },
+      { kind: "fix", text: "A QC inspection and the case move are now saved together, so an inspection can never be lost while the case moves on." },
+      { kind: "fix", text: "Advancing several cases at once now moves all of them or none of them." },
+      { kind: "fix", text: "Cases still in Ceramics no longer appear in the QC queue." },
+      { kind: "improvement", text: "Due dates count lab working days and skip weekends and holidays. Toggle Saturday opening on the calendar." },
+      { kind: "improvement", text: "Daily capacity is shared by the whole lab instead of saved on one computer." },
+      { kind: "fix", text: "Time on clinic hold is no longer counted against the lab when a case is late, and delivered cases now record their delivery date." },
+      { kind: "fix", text: "Remake rate now compares remakes against cases delivered in the last 90 days, and free-remake value counts each original case once." },
+    ],
+  },
+  {
     version: "v2.27.0",
     date: "October 30, 2026",
     title: "Printable job travelers for lab cases",
