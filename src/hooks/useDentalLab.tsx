@@ -10,25 +10,44 @@ export const patientOf = (c: Partial<LabCaseRow>) =>
 export const isRush = (c: Partial<LabCaseRow>) => !!(c.is_urgent || c.urgency === "urgent");
 export const isCancelled = (c: Partial<LabCaseRow>) => c.status === "cancelled";
 export const isOverdue = (c: Partial<LabCaseRow>) =>
-  !!c.due_date && new Date(c.due_date) < new Date(new Date().toDateString()) && !["ready", "delivered", "cancelled"].includes(c.status || "");
+  !!c.due_date && new Date(c.due_date) < new Date(new Date().toDateString()) && !["ready", "delivered", "cancelled", "on_hold"].includes(c.status || "");
 
 export function useMoveCase() {
   const qc = useQueryClient();
   return useMutation({
+    // Start/finish/delivery dates, hold time and the QC gate are enforced by the database.
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const today = new Date().toISOString().slice(0, 10);
-      const { data: cur } = await (supabase as any).from("lab_cases").select("start_date,completed_date").eq("id", id).single();
-      const patch: any = { status };
-      if (status === "pending") patch.start_date = null;
-      else if (!cur?.start_date && status !== "cancelled") patch.start_date = today;
-      // Finished stages keep their first finish date; moving back reopens the case.
-      if (status === "ready" || status === "delivered") patch.completed_date = cur?.completed_date || today;
-      else if (status !== "cancelled") patch.completed_date = null;
-      const { error } = await (supabase as any).from("lab_cases").update(patch).eq("id", id);
+      const { error } = await (supabase as any).from("lab_cases").update({ status }).eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["lab_cases"] }),
     onError: (e: any) => toast({ title: "Could not move case", description: e.message, variant: "destructive" }),
+  });
+}
+
+/** Owner/admin/manager only: ship past a failed or missing QC, with a logged reason. */
+export function useOverrideQcMove() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, status, reason }: { id: string; status: string; reason: string }) => {
+      const { error } = await (supabase as any).rpc("lab_override_qc_move", { p_case_id: id, p_status: status, p_reason: reason });
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["lab_cases"] }); toast({ title: "QC override recorded" }); },
+    onError: (e: any) => toast({ title: "Override refused", description: e.message, variant: "destructive" }),
+  });
+}
+
+/** Move many cases in one all-or-nothing step. */
+export function useBatchMove() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (moves: { id: string; status: string }[]) => {
+      const { data, error } = await (supabase as any).rpc("lab_batch_move", { p_moves: moves });
+      if (error) throw error;
+      return Number(data || 0);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["lab_cases"] }),
   });
 }
 
