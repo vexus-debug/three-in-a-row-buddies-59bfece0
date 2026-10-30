@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { LAB_STAGES, REMAKE_SPAWNED, WORK_TYPES, normalizeStage, stageLabel } from "@/config/dentalLab";
 import { useLabCases, useUpdateLabCase, type LabCaseRow } from "@/hooks/useLabCases";
 import { useStaff } from "@/hooks/useStaff";
-import { useMoveCase, useHoldCase, useCreateDentalLabCase, clientOf, patientOf, isRush, isOverdue, isCancelled } from "@/hooks/useDentalLab";
+import { useMoveCase, useOverrideQcMove, useBatchMove, useHoldCase, useCreateDentalLabCase, clientOf, patientOf, isRush, isOverdue, isCancelled } from "@/hooks/useDentalLab";
 import { CaseFiles } from "@/components/dlab/CaseFiles";
 import { TeethPicker } from "@/components/dlab/TeethPicker";
 import { HoldDialog } from "@/components/dlab/HoldDialog";
@@ -23,6 +23,7 @@ import { RemakeDialog } from "@/components/dlab/RemakeDialog";
 import { PrintTravelerButton } from "@/components/dlab/PrintTravelerButton";
 import { blockedReason, nextStage, prevStage, splitLegacyTeeth } from "@/lib/labWorkflow";
 import { toast } from "@/hooks/use-toast";
+import { useOrg } from "@/hooks/useOrg";
 import { useLabClientNames, canonicalClient, useClientPriceLookup } from "./dlabLinks";
 
 /** Structured teeth, falling back to the legacy "Teeth:" line in instructions. */
@@ -35,6 +36,10 @@ const money = (n: number) => `₦${Number(n || 0).toLocaleString()}`;
 export default function DlabCasesPage() {
   const { data: cases = [], isLoading } = useLabCases();
   const move = useMoveCase();
+  const override = useOverrideQcMove();
+  const batch = useBatchMove();
+  const { currentOrg } = useOrg();
+  const canOverride = ["owner", "admin", "manager"].includes(currentOrg?.role || "");
   const [q, setQ] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -60,10 +65,17 @@ export default function DlabCasesPage() {
     const from = isHeld(c) ? "on_hold" : normalizeStage(c.status);
     const why = blockedReason(from, to, (c as any).qc_status);
     if (why) {
-      if (from === "on_hold" || !window.confirm(`${why} Move ${c.case_number} anyway? (admin override)`)) {
-        toast({ title: "Move blocked", description: why, variant: "destructive" });
+      if (from === "on_hold" || !canOverride || !["ready", "delivered"].includes(to)) {
+        toast({ title: "Move blocked", description: canOverride || from === "on_hold" ? why : `${why} Only an owner, admin or manager can override.`, variant: "destructive" });
         return false;
       }
+      const reason = window.prompt(`${why}\nAdmin override for ${c.case_number}: give a reason (it is saved in the case history).`);
+      if (!reason || reason.trim().length < 5) {
+        toast({ title: "Move blocked", description: "An override needs a reason of at least 5 characters.", variant: "destructive" });
+        return false;
+      }
+      override.mutate({ id: c.id, status: to, reason: reason.trim() });
+      return true;
     }
     move.mutate({ id: c.id, status: to });
     return true;
@@ -75,12 +87,16 @@ export default function DlabCasesPage() {
   };
   const batchAdvance = () => {
     const list = visible.filter((c) => selected.includes(c.id) && !isHeld(c));
-    let n = 0;
-    for (const c of list) {
+    const moves = list.flatMap((c) => {
       const to = nextStage(normalizeStage(c.status));
-      if (to && !blockedReason(normalizeStage(c.status), to, (c as any).qc_status)) { move.mutate({ id: c.id, status: to }); n++; }
-    }
-    toast({ title: `Advanced ${n} case${n === 1 ? "" : "s"}`, description: n < list.length ? `${list.length - n} skipped (QC not passed or already delivered).` : undefined });
+      return to && !blockedReason(normalizeStage(c.status), to, (c as any).qc_status) ? [{ id: c.id, status: to }] : [];
+    });
+    const skipped = list.length - moves.length;
+    if (!moves.length) { toast({ title: "Nothing advanced", description: `${skipped} skipped (QC not passed or already delivered).` }); setSelected([]); return; }
+    batch.mutate(moves, {
+      onSuccess: (n) => toast({ title: `Advanced ${n} case${n === 1 ? "" : "s"}`, description: skipped ? `${skipped} skipped (QC not passed or already delivered).` : undefined }),
+      onError: (e: any) => toast({ title: "No cases were moved", description: e.message, variant: "destructive" }),
+    });
     setSelected([]);
   };
   const toggleSel = (id: string) => setSelected((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
