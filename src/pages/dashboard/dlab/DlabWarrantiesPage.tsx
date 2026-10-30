@@ -12,7 +12,7 @@ import { useLabRecords, useSaveLabRecord } from "@/hooks/useLabRecords";
 import { useStaff } from "@/hooks/useStaff";
 import { clientOf, patientOf } from "@/hooks/useDentalLab";
 import { stageLabel } from "@/config/dentalLab";
-import { REMAKE_FAULTS, remakeRateBy } from "@/lib/labRemake";
+import { REMAKE_FAULTS, remakeRateBy, periodRemakeRate, freeRemakeValue } from "@/lib/labRemake";
 import { RemakeDialog } from "@/components/dlab/RemakeDialog";
 
 const money = (n: number) => `₦${Number(n || 0).toLocaleString()}`;
@@ -59,7 +59,7 @@ export default function DlabWarrantiesPage() {
       <PageHeader title="Remakes & Warranties" description="Start remakes from any case, record who is responsible, and watch remake rates." />
 
       <div className="grid gap-3 sm:grid-cols-4">
-        <Kpi label="Remake rate" value={`${rate}%`} />
+        <Kpi label="Remake rate (90 days)" value={`${rate}%`} />
         <Kpi label="Lab fault" value={byFault("lab")} />
         <Kpi label="Clinic fault (billed)" value={byFault("clinic")} />
         <Kpi label="Free remake value" value={money(lost)} sub={`${byFault("material")} material claims`} />
